@@ -14,5 +14,5 @@ const connectDB = async () => {
     process.exit(1);
   }
 };
-
+////de
 export default connectDB;
