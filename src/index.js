@@ -5,7 +5,7 @@ import { initializeAdmin } from "./Modules/Admin/Admin.controler.js";
 dotenv.config({
   path: "./.env",
 });
-
+// Importing necessary modules and initializing the application
 connectDB()
   .then(() => {
     console.log("mongoose connected successfully ");
