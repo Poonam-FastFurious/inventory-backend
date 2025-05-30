@@ -19,10 +19,7 @@ const rawMaterialMasterSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
-    image: {
-      type: String,
-      default: "", // Cloudinary URL or public_id
-    },
+
     unit: {
       type: String,
     },

@@ -20,24 +20,11 @@ export const addRawMaterialMaster = async (req, res) => {
       throw new ApiError(400, "Code is required");
     }
 
-    // ✅ Validate Image
-    if (!req.files?.image) {
-      throw new ApiError(400, "Image is required");
-    }
-
-    // ✅ Upload Image to Cloudinary
-    const imageLocalPath = req.files.image[0].path;
-    const uploadedImage = await uploadOnCloudinary(imageLocalPath);
-    if (!uploadedImage) {
-      throw new ApiError(400, "Failed to upload image");
-    }
-
-    // ✅ Create raw material master object
+    // ✅ Create raw material master object (without image)
     const rawMaterialMaster = await RawMaterialMaster.create({
       name,
       code,
       description,
-      image: uploadedImage.url,
     });
 
     return res
@@ -70,6 +57,79 @@ export const addRawMaterialMaster = async (req, res) => {
     }
 
     // ✅ Handle Unknown Errors
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+export const addbulkMaster = async (req, res) => {
+  try {
+    const materials = req.body;
+
+    if (!Array.isArray(materials) || materials.length === 0) {
+      throw new ApiError(400, "Request body should be a non-empty array");
+    }
+
+    const validMaterials = [];
+
+    for (const item of materials) {
+      if (!item.name || !item.code) {
+        continue; // skip invalid
+      }
+
+      // Check if material already exists by code
+      const exists = await RawMaterialMaster.findOne({ code: item.code });
+
+      if (!exists) {
+        validMaterials.push(item);
+      }
+    }
+
+    if (validMaterials.length === 0) {
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            [],
+            "No new raw materials to add (all duplicates)"
+          )
+        );
+    }
+
+    const inserted = await RawMaterialMaster.insertMany(validMaterials, {
+      ordered: false, // continue on error
+    });
+
+    return res
+      .status(201)
+      .json(
+        new ApiResponse(
+          201,
+          inserted,
+          "New raw material masters added successfully"
+        )
+      );
+  } catch (error) {
+    console.error("❌ Error adding raw material masters:", error);
+
+    if (error.name === "ValidationError") {
+      const errors = Object.values(error.errors).map((err) => err.message);
+      return res.status(400).json({
+        success: false,
+        message: errors.join(", "),
+      });
+    }
+
+    if (error instanceof ApiError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
     return res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -204,13 +264,15 @@ export const listRawMaterialMasters = async (req, res) => {
       totalCount = rawMaterials.length;
     }
 
-    return res.status(200).json(
-      new ApiResponse(
-        200,
-        { rawMaterials, totalCount },
-        "Raw Material Masters fetched successfully"
-      )
-    );
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          { rawMaterials, totalCount },
+          "Raw Material Masters fetched successfully"
+        )
+      );
   } catch (error) {
     console.error("❌ Error listing raw material masters:", error);
 
@@ -228,4 +290,38 @@ export const listRawMaterialMasters = async (req, res) => {
   }
 };
 
- 
+export const getRawMaterialMasterById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // ✅ Validate ID
+    if (!id) {
+      throw new ApiError(400, "ID parameter is required");
+    }
+
+    // ✅ Find by ID
+    const material = await RawMaterialMaster.findById(id);
+
+    if (!material) {
+      throw new ApiError(404, "Raw Material Master not found");
+    }
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, material, "Raw Material Master retrieved"));
+  } catch (error) {
+    console.error("❌ Error getting raw material master by ID:", error);
+
+    if (error instanceof ApiError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
