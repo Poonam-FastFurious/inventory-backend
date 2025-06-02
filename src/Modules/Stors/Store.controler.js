@@ -68,18 +68,73 @@ export const addStore = async (req, res) => {
       .json({ success: false, message: "Internal server error" });
   }
 };
+export const toggleStoreStatus = async (req, res) => {
+  try {
+    const store = await Store.findById(req.params.id);
+    if (!store) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Store not found" });
+    }
 
+    store.active = !store.active;
+    await store.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Store status updated",
+      active: store.active,
+    });
+  } catch (error) {
+    console.error("Error toggling store status:", error);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+export const deleteStore = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deletedStore = await Store.findByIdAndDelete(id);
+
+    if (!deletedStore) {
+      throw new ApiError(404, "Store not found");
+    }
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, null, "Store deleted successfully"));
+  } catch (error) {
+    console.error("❌ Error deleting store:", error);
+    if (error instanceof ApiError) {
+      return res
+        .status(error.statusCode)
+        .json({ success: false, message: error.message });
+    }
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
+  }
+};
 export const getAllStores = async (req, res) => {
   try {
-    const stores = await Store.find().select("-password"); // Exclude password
+    const stores = await Store.find()
+      .select("-password")
+      .populate({
+        path: "assignedMasterMaterials",
+        select: "name", // Only include the 'name' field of RawMaterialMaster
+      })
+      .sort({ createdAt: -1 });
+
     return res
       .status(200)
       .json(new ApiResponse(200, stores, "All stores fetched successfully"));
   } catch (error) {
     console.error("❌ Error fetching stores:", error);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
+
 export const getStoreById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -99,9 +154,11 @@ export const getStoreById = async (req, res) => {
         .status(error.statusCode)
         .json({ success: false, message: error.message });
     }
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
-};      
+};
 export const editStore = async (req, res) => {
   try {
     const storeId = req.params.id;
@@ -143,52 +200,58 @@ export const editStore = async (req, res) => {
     console.error("❌ Error updating store:", error);
 
     if (error instanceof ApiError) {
-      return res.status(error.statusCode).json({ success: false, message: error.message });
-    }
-
-    return res.status(500).json({ success: false, message: "Internal server error" });
-  }
-};
-export const deleteStore = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const deletedStore = await Store.findByIdAndDelete(id);
-
-    if (!deletedStore) {
-      throw new ApiError(404, "Store not found");
-    }
-
-    return res
-      .status(200)
-      .json(new ApiResponse(200, null, "Store deleted successfully"));
-  } catch (error) {
-    console.error("❌ Error deleting store:", error);
-    if (error instanceof ApiError) {
       return res
         .status(error.statusCode)
         .json({ success: false, message: error.message });
     }
-    return res.status(500).json({ success: false, message: "Internal server error" });
+
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
 
-export const toggleStoreStatus = async (req, res) => {
+export const assignMasterMaterials = async (req, res) => {
   try {
-    const store = await Store.findById(req.params.id);
-    if (!store) {
-      return res.status(404).json({ success: false, message: "Store not found" });
+    const { storeId, masterMaterialIds } = req.body;
+
+    if (!storeId) throw new ApiError(400, "Store ID is required");
+    if (!Array.isArray(masterMaterialIds) || masterMaterialIds.length === 0) {
+      throw new ApiError(400, "masterMaterialIds must be a non-empty array");
     }
 
-    store.active = !store.active;
+    const store = await Store.findById(storeId);
+    if (!store) throw new ApiError(404, "Store not found");
+
+    // Merge and remove duplicates using Set
+    const existingIds = store.assignedMasterMaterials.map((id) =>
+      id.toString()
+    );
+    const newIds = masterMaterialIds.map((id) => id.toString());
+
+    const combinedIds = [...new Set([...existingIds, ...newIds])];
+    store.assignedMasterMaterials = combinedIds;
+
     await store.save();
 
-    return res.status(200).json({
-      success: true,
-      message: "Store status updated",
-      active: store.active,
-    });
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(200, store, "Master materials assigned successfully")
+      );
   } catch (error) {
-    console.error("Error toggling store status:", error);
-    return res.status(500).json({ success: false, message: "Server error" });
+    console.error("❌ Error assigning master materials:", error);
+
+    if (error instanceof ApiError) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
 };

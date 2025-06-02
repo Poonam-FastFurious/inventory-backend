@@ -35,6 +35,12 @@ const storeSchema = new mongoose.Schema(
       type: String, // Cloudinary URL or image path
       default: null,
     },
+    assignedMasterMaterials: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "RawMaterialMaster",
+      },
+    ],
     active: {
       type: Boolean,
       default: true,
